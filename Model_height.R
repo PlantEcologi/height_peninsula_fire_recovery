@@ -117,8 +117,8 @@ model {
     ## lambda.height approximately =
     ##     lambda.ndvi * exp(delta)
     
-    log(lambda.height[i]) ~
-      dnorm(
+    lambda.height[i] ~
+      dlnorm(
         log(lambda.ndvi[i]) + delta.mu,
         delta.tau
       )
@@ -152,6 +152,9 @@ model {
   
   ## Mean of log(H0)
   H0.mu ~ dnorm(0, 1)
+  
+  ## Phase of the seasonal NDVI cycle
+  phi ~ dunif(-3.141593, 3.141593)
   
   
   #################################################################
