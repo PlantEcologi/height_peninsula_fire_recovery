@@ -29,7 +29,7 @@ NDVIdates <- read.csv("data/NDVI_dates_2001_2026.csv")
 time(NDVI) <- as.Date(NDVIdates$date)
 
 # Select only NDVI within the fire observation period
-NDVI <- NDVI[[time(NDVI) < as.Date("2022-06-01")]]
+NDVI <- NDVI[[time(NDVI) < as.Date("2023-12-31")]]
 
 ###A fix for my specific dataset
 #Set fires with no day or month to be on the 1 Jan each year
@@ -78,7 +78,7 @@ rfi <- rast(rfi)
 names(rfi) <- date
 # rfi <- setZ(rfi, date)
 
-writeRaster(rfi, "data/veldage2022.tif", overwrite = TRUE)
+writeRaster(rfi, "data/veldage2023.tif", overwrite = TRUE)
 
 ### Code to process output raster stack - in this case I select only sites that burnt on record
 fires$IDs <- 1:nrow(fires) # Add an unique ID for each fire
