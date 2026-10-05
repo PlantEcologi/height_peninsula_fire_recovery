@@ -54,7 +54,7 @@ NDVI <- trim(NDVI)
 NDVI <- project(NDVI, y = crs(projection))
 NDVIdates <- read.csv("data/NDVI_dates_2001_2026.csv")
 time(NDVI) <- as.Date(NDVIdates$date)
-NDVI <- NDVI[[time(NDVI) < as.Date("2022-06-01")]] # fire observation period
+NDVI <- NDVI[[time(NDVI) <= as.Date("2023-12-31")]] # observation period (extends beyond the fire record, which ends in 2022)
 names(NDVI) <- format(time(NDVI), "%Y-%m-%d")
 
 #spatial covariates
@@ -90,7 +90,26 @@ fdat <- extract(rfi, pts, method = "simple") |>
   pivot_longer(cols = -UIJ, names_to = "Date", values_to = "Age") |>
   mutate(Date = as.Date(Date, format = "%Y-%m-%d"))
 
-cdat <- inner_join(na.omit(ndat), na.omit(fdat), by = c("UIJ", "Date"))
+fdat <- na.omit(fdat)
+
+# The fire age data end in 2022, so for later NDVI dates age is calculated from
+# the date of the most recent fire (assumes no fires after the fire record ends)
+last_fire <- fdat |>
+  group_by(UIJ) |>
+  slice_max(Date, n = 1, with_ties = FALSE) |>
+  ungroup() |>
+  mutate(FireDate = Date - Age) |>
+  select(UIJ, FireDate, LastDate = Date)
+
+adat <- ndat |>
+  select(UIJ, Date) |>
+  left_join(fdat, by = c("UIJ", "Date")) |>
+  left_join(last_fire, by = "UIJ") |>
+  mutate(Age = if_else(is.na(Age) & Date > LastDate,
+                       as.numeric(Date - FireDate), as.numeric(Age))) |>
+  select(UIJ, Date, Age)
+
+cdat <- inner_join(na.omit(ndat), na.omit(adat), by = c("UIJ", "Date"))
 
 # Covariates
 cov <- extract(sta, pts, method = "simple") |>
@@ -115,25 +134,26 @@ cov <- cov |>
   filter(if_all(all_of(envars), ~ !is.na(.x))) |>
   filter(UIJ %in% cdat$UIJ)
 
-# Fire date per site (date of last fire before the end of the NDVI record),
-# used to compute vegetation age at the height survey dates
-firedat <- cdat |>
-  mutate(FireDate = Date - Age) |>
-  group_by(UIJ) |>
-  summarise(FireDate = max(FireDate), .groups = "drop")
+# Assign the height data from each year to the NDVI date closest to mid-January
+# of that year, using the vegetation age on that date
+ndvi_dates <- sort(unique(ndat$Date))
+height_dates <- tibble(
+  Year = as.integer(height_years),
+  Date = ndvi_dates[sapply(as.Date(paste0(height_years, "-01-15")),
+                           function(d) which.min(abs(as.numeric(ndvi_dates - d))))]
+)
 
-# Height survey age (years since fire, assuming mid-year surveys)
 hdat <- hdat |>
-  inner_join(firedat, by = "UIJ") |>
-  mutate(DA = as.numeric(as.Date(paste0(Year, "-07-01")) - FireDate) / 365.25) |>
-  filter(DA > 0)
+  inner_join(height_dates, by = "Year") |>
+  inner_join(na.omit(adat), by = c("UIJ", "Date")) |>
+  filter(Age > 0)
 
 keep <- intersect(unique(cov$UIJ), unique(hdat$UIJ))
 cov <- filter(cov, UIJ %in% keep)
 cdat <- filter(cdat, UIJ %in% keep)
 hdat <- filter(hdat, UIJ %in% keep)
 
-rm(list = c("NDVI", "NDVIdates", "sta", "rfi", "ndat", "fdat", "firedat")); gc()
+rm(list = c("NDVI", "NDVIdates", "sta", "rfi", "ndat", "fdat", "adat", "last_fire")); gc()
 
 ###########################################################
 ### Add columns for month of fire and age in years
@@ -142,7 +162,7 @@ rm(list = c("NDVI", "NDVIdates", "sta", "rfi", "ndat", "fdat", "firedat")); gc()
 cdat <- cdat |> mutate(firemonth = month(Date - Age))
 cdat$DA <- cdat$Age / 365.25
 
-hdat <- hdat |> mutate(firemonth = month(FireDate))
+hdat <- hdat |> mutate(DA = Age / 365.25, firemonth = month(Date - Age))
 
 ###########################################################
 ### Select and scale environmental data
