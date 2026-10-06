@@ -67,7 +67,7 @@ sta$northness <- cos(sta$aspect*pi/180)
 sta$eastness <- sin(sta$aspect*pi/180)
 
 #vegetation age
-rfi <- rast("data/veldage2022.tif")
+rfi <- rast("data/veldage2023.tif")
 rfi <- project(rfi, NDVI)
 
 ###########################################################
@@ -92,7 +92,7 @@ fdat <- extract(rfi, pts, method = "simple") |>
 
 fdat <- na.omit(fdat)
 
-# The fire age data end in 2022, so for later NDVI dates age is calculated from
+# The fire age data end in 2023. If there are later NDVI dates, age is calculated from
 # the date of the most recent fire (assumes no fires after the fire record ends)
 last_fire <- fdat |>
   group_by(UIJ) |>
